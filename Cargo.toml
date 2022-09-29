@@ -1,0 +1,10 @@
+[package]
+name = "repo_init_endpoint"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+git2 = { version = "0.15.0", default-features = false }
+rocket = { version = "0.4.11", features = ["tls"] }
