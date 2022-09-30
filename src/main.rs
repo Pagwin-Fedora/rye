@@ -3,9 +3,10 @@
 extern crate git2;
 extern crate dirs;
 extern crate lazy_static;
-use std::{io::{Read, Write}, ops::Try};
+use std::{io::{Read, Write}};
 
 use lazy_static::lazy_static;
+use rocket::Data;
 
 lazy_static!{
     static ref CONFIG:Config = retrieve_config();
@@ -42,10 +43,14 @@ fn ping()->String{
 /// Corresponds to the endpoint /create_repo, this endpoint takes a string for it's body which it
 /// will use as the name of the repo it will initiate
 #[post("/create_repo", data = "<repo_name>")]
-fn create_repo(repo_name:String)->String{
-
+fn create_repo(repo_name:Data)->String{
     //thank you try block for letting me write the code I want
-    let tmp: Result<(),Box<dyn std::error::Error>> = try{
+    let tmp: Result<String,Box<dyn std::error::Error>> = try{
+        let repo_name = {
+            let mut tmp = String::new();
+            repo_name.open().read_to_string(&mut tmp)?;
+            tmp
+        };
         let mut builder = std::fs::DirBuilder::new();
         let mut pth = CONFIG.repos.clone();
         builder.recursive(true);
@@ -55,11 +60,11 @@ fn create_repo(repo_name:String)->String{
         pth.push(repo_name.as_str());
         builder.create(&pth).map(|_|{()})?;
         git2::Repository::init_bare(pth)?;
-        ().into()
+        repo_name.into()
     };
 
     match tmp{
-        Ok(_)=>repo_name,
+        Ok(name)=>name,
         Err(e)=>e.to_string()
     }
 }
