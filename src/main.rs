@@ -1,9 +1,9 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro, try_blocks, try_trait_v2)]
 #[macro_use] extern crate rocket;
 extern crate git2;
 extern crate dirs;
 extern crate lazy_static;
-use std::io::{Read, Write};
+use std::{io::{Read, Write}, ops::Try};
 
 use lazy_static::lazy_static;
 
@@ -42,40 +42,61 @@ fn ping()->String{
 /// Corresponds to the endpoint /create_repo, this endpoint takes a string for it's body which it
 /// will use as the name of the repo it will initiate
 #[post("/create_repo", data = "<repo_name>")]
-fn create_repo(repo_name:String)->Result<String,Box<dyn std::error::Error>>{
-    let mut builder = std::fs::DirBuilder::new();
-    let mut pth = CONFIG.repos.clone();
-    
-    // just making sure the directory for our repos exists
-    builder.recursive(true);
-    builder.create(&pth)?;
+fn create_repo(repo_name:String)->String{
 
-    builder.recursive(false);
-    pth.push(repo_name.as_str());
-    builder.create(&pth)?;
-    git2::Repository::init_bare(pth)?;
-    Ok(repo_name)
+    //thank you try block for letting me write the code I want
+    let tmp: Result<(),Box<dyn std::error::Error>> = try{
+        let mut builder = std::fs::DirBuilder::new();
+        let mut pth = CONFIG.repos.clone();
+        builder.recursive(true);
+        builder.create(&pth).map(|_|{()})?;
+
+        builder.recursive(false);
+        pth.push(repo_name.as_str());
+        builder.create(&pth).map(|_|{()})?;
+        git2::Repository::init_bare(pth)?;
+        ().into()
+    };
+
+    match tmp{
+        Ok(_)=>repo_name,
+        Err(e)=>e.to_string()
+    }
 }
 
 /// The endpoint to change the description of a repo
 #[post("/<repo_name>/description", data = "<description>")]
-fn change_description(repo_name:String,description:String)-> Result<String, Box<dyn std::error::Error>>{
+fn change_description(repo_name:String,description:String)-> String{
+    //building the path to the description
     let mut pth = CONFIG.repos.clone();
     pth.push(&repo_name);
     pth.push("description");
-    let mut file = std::fs::File::create(pth)?;
-    write!(file,"{}",description)?;
-    Ok(repo_name)
+
+    let tmp: Result<(),std::io::Error> = try{
+        let mut file = std::fs::File::create(pth)?;
+        write!(file,"{}",description)?;
+        ().into()
+    };
+    match tmp{
+        Ok(_)=>repo_name,
+        Err(e)=>e.to_string()
+    }
 }
 
 /// The endpoint to get the current description of a repo
 #[get("/<repo_name>/description")]
-fn read_description(repo_name:String)-> Result<String, Box<dyn std::error::Error>>{
+fn read_description(repo_name:String)-> String{
     let mut pth = CONFIG.repos.clone();
     pth.push(&repo_name);
     pth.push("description");
-    let mut file = std::fs::File::open(pth)?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf)?;
-    Ok(buf)
+    let res:Result<String, Box<dyn std::error::Error>> = try{
+        let mut buf = String::new();
+        let mut file = std::fs::File::open(pth)?;
+        file.read_to_string(&mut buf)?;
+        buf.into()
+    };
+    match res{
+        Ok(desc)=>desc,
+        Err(e)=>e.to_string()
+    }
 }
