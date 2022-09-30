@@ -71,13 +71,18 @@ fn create_repo(repo_name:Data)->String{
 
 /// The endpoint to change the description of a repo
 #[post("/<repo_name>/description", data = "<description>")]
-fn change_description(repo_name:String,description:String)-> String{
+fn change_description(repo_name:String,description:Data)-> String{
     //building the path to the description
     let mut pth = CONFIG.repos.clone();
     pth.push(&repo_name);
     pth.push("description");
 
     let tmp: Result<(),std::io::Error> = try{
+        let description = {
+            let mut tmp = String::new();
+            description.open().read_to_string(&mut tmp)?;
+            tmp
+        };
         let mut file = std::fs::File::create(pth)?;
         write!(file,"{}",description)?;
         ().into()
