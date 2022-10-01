@@ -1,8 +1,7 @@
 FROM rust:alpine
-COPY . /src
-WORKDIR /src
-RUN ["cargo", "fetch"]
-RUN ["rustup", "toolchain", "install", "nightly"]
-RUN ["rustup", "override", "set", "nightly"]
-RUN ["cargo", "build", "--release"]
-CMD ["target/relese/rye"]
+RUN ["apk", "add", "libgit2", "git"]
+COPY Rocket.toml /
+COPY config.toml /
+COPY rye /usr/bin/rye
+ENV CONFIG_FILE="/config.toml"
+CMD ["rye"]
