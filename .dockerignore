@@ -1,0 +1,4 @@
+target/
+src/
+rye-client/
+Cargo.*
