@@ -39,11 +39,38 @@ fn retrieve_config<'a>() -> Config{
 fn ping()->String{
     format!("Pong the repo creation endpoint is up!")
 }
+struct EasyDisplay(Result<String,String>);
+impl From<EasyDisplay> for Result<String,String>{
+    fn from(v: EasyDisplay) -> Self {
+        v.0
+    }
+}
+impl From<Result<String,String>> for EasyDisplay{
+    fn from(v: Result<String,String>) -> Self {
+        EasyDisplay(v)
+    }
+}
+impl <'a> rocket::response::Responder<'a> for EasyDisplay{
+    fn respond_to(self, _request: &rocket::Request) -> rocket::response::Result<'a> {
+        let mut builder = rocket::response::ResponseBuilder::new(rocket::response::Response::new());
+        match self.into(){
+            Result::Ok(v)=>{
+                builder.status(rocket::http::Status::Ok);
+                builder.sized_body(std::io::Cursor::new(v));
+            },
+            Result::Err(v)=>{
+                builder.status(rocket::http::Status::InternalServerError);
+                builder.sized_body(std::io::Cursor::new(v));
+            }
+        }
+        rocket::response::Result::Ok(builder.finalize())
+    }
+}
 
 /// Corresponds to the endpoint /create_repo, this endpoint takes a string for it's body which it
 /// will use as the name of the repo it will initiate
 #[post("/create_repo", data = "<repo_name>")]
-fn create_repo(repo_name:Data)->String{
+fn create_repo(repo_name:Data)->EasyDisplay{
     //thank you try block for letting me write the code I want
     let tmp: Result<String,Box<dyn std::error::Error>> = try{
         let repo_name = {
@@ -62,16 +89,12 @@ fn create_repo(repo_name:Data)->String{
         git2::Repository::init_bare(pth)?;
         repo_name.into()
     };
-
-    match tmp{
-        Ok(name)=>name,
-        Err(e)=>e.to_string()
-    }
+    tmp.map_err(|e|e.to_string()).into()
 }
 
 /// The endpoint to change the description of a repo
 #[post("/<repo_name>/description", data = "<description>")]
-fn change_description(repo_name:String,description:Data)-> String{
+fn change_description(repo_name:String,description:Data)-> EasyDisplay{
     //building the path to the description
     let mut pth = CONFIG.repos.clone();
     pth.push(&repo_name);
@@ -87,15 +110,12 @@ fn change_description(repo_name:String,description:Data)-> String{
         write!(file,"{}",description)?;
         ().into()
     };
-    match tmp{
-        Ok(_)=>repo_name,
-        Err(e)=>e.to_string()
-    }
+    tmp.map(|_|repo_name).map_err(|e|e.to_string()).into()
 }
 
 /// The endpoint to get the current description of a repo
 #[get("/<repo_name>/description")]
-fn read_description(repo_name:String)-> String{
+fn read_description(repo_name:String)-> EasyDisplay{
     let mut pth = CONFIG.repos.clone();
     pth.push(&repo_name);
     pth.push("description");
@@ -105,8 +125,6 @@ fn read_description(repo_name:String)-> String{
         file.read_to_string(&mut buf)?;
         buf.into()
     };
-    match res{
-        Ok(desc)=>desc,
-        Err(e)=>e.to_string()
-    }
+    res.map_err(|e|e.to_string()).into()
 }
+
