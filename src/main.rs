@@ -26,9 +26,15 @@ struct Config{
 
 /// function that retrieves the config
 fn retrieve_config<'a>() -> Config{
-    let mut path = dirs::config_dir().expect("No config directory");
-    path.push(std::option_env!("CARGO_PKG_NAME").unwrap());
-    path.push("config.toml");
+    let path = match std::env::var(std::option_env!("CARGO_PKG_NAME").unwrap().to_string().to_uppercase()+"_CONFIG"){
+        Ok(v)=>v.into(),
+        Err(_)=>{
+            let mut tmp = dirs::config_dir().expect("No config directory");
+            tmp.push(std::option_env!("CARGO_PKG_NAME").unwrap());
+            tmp.push("config.toml");
+            tmp
+        }
+    };
     let mut buf = String::new();
     std::fs::File::open(path).expect("file doesn't exist create config.toml").read_to_string(&mut buf).expect("IO error when reading file");
     toml::from_str(&buf).unwrap_or_else(|e|{panic!("Toml error:\n{}",e.to_string())})
