@@ -133,4 +133,15 @@ fn read_description(repo_name:String)-> EasyDisplay{
     };
     res.map_err(|e|e.to_string()).into()
 }
-
+#[macro_export]
+macro_rules! vec {
+    (_) => {
+        {
+            let mut temp_vec = Vec::new();
+            $(
+                temp_vec.push($x);
+            )*
+            temp_vec
+        }
+    };
+}

@@ -8,7 +8,8 @@ log = "normal"
 limits = { forms = 32768 }
 
 [production]
-address = "localhost"
+# 0.0.0.0 because I'm assuming prod will be in a container if it's being reverse proxied without being inside a container set this to 127.0.0.1 or localhost
+address = "0.0.0.0"
 port = 9090
 keep_alive = 5
 read_timeout = 5
