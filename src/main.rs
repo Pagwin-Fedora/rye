@@ -3,7 +3,7 @@
 extern crate git2;
 extern crate dirs;
 extern crate lazy_static;
-use std::{io::{Read, Write}};
+use std::io::{Read, Write};
 
 use lazy_static::lazy_static;
 use rocket::Data;
@@ -26,7 +26,7 @@ struct Config{
 
 /// function that retrieves the config
 fn retrieve_config<'a>() -> Config{
-    let path = match std::env::var(std::option_env!("CARGO_PKG_NAME").unwrap().to_string().to_uppercase()+"_CONFIG"){
+    let path = match std::env::var(std::env!("CARGO_PKG_NAME").to_string().to_uppercase()+"_CONFIG"){
         Ok(v)=>v.into(),
         Err(_)=>{
             let mut tmp = dirs::config_dir().expect("No config directory");
