@@ -11,7 +11,7 @@ use clap::{Command, Arg, ValueHint};
 use lazy_static::lazy_static;
 use regex::Regex;
 lazy_static!{
-    static ref CONFIG:Option<Config> = Config::from_file(default_config()).ok();
+    static ref CONFIG:Option<Config> = FileConfig::from_file(default_config()).map(Config::from).ok();
     static ref HTTP:reqwest::blocking::Client = reqwest::blocking::Client::new();
     static ref BASIC_USER:Regex = Regex::new("username:.*,").expect("internal regex error on auth, please try again");
     static ref BASIC_PASS:Regex = Regex::new("password:.*").expect("internal regex error on auth, please try again");
@@ -20,6 +20,7 @@ lazy_static!{
 fn default_config()->impl AsRef<Path>{
     let mut buf = std::path::PathBuf::new();
     buf.push(dirs::config_dir().expect("no config dir on system"));
+    buf.push(std::env!("CARGO_PKG_NAME"));
     buf.push("config.toml");
     buf
 }
@@ -32,7 +33,7 @@ fn main()->Result<(),Box<dyn std::error::Error>>{
     let matches = cli.get_matches();
     let config = match matches.get_one::<std::path::PathBuf>("config"){
         Some(path)=>{
-            Config::from_file(path)?
+            FileConfig::from_file(path)?.into()
         },
         None=>{
             CONFIG.clone().unwrap()
@@ -119,7 +120,14 @@ fn create_repo(name:String,Config {auth, remote_url, repo_template,..}:&Config)-
         let tmp = HTTP.post(remote_url.clone()+"create_repo")
             .body(name);
         handle_auth(tmp, auth.clone())
-    }.send()?;
+    }.send();
+    let response = match response{
+        Ok(r)=>r,
+        Err(e)=>{
+            eprintln!("{:?}",e);
+            panic!();
+        }
+    };
     Ok(repo_template.replace("%%%", response.error_for_status()?.text()?.as_str()))
 }
 fn get_description(repo_name:String,Config{auth, remote_url,..}:&Config)->reqwest::Result<String>{
@@ -204,15 +212,30 @@ impl From<&str> for SubCommands{
         
     }
 }
-#[derive(serde::Serialize,serde::Deserialize,Clone)]
+#[derive(Clone)]
 struct Config{
+    remote_url:String,
+    repo_template:String,
+    auth:Option<Auth>
+}
+impl From<FileConfig> for Config{
+    fn from(FileConfig { remote_url, repo_template, auth }: FileConfig) -> Self {
+        Self{
+            remote_url,
+            repo_template,
+            auth
+        }
+    }
+}
+#[derive(serde::Serialize,serde::Deserialize,Clone)]
+struct FileConfig{
     remote_url:String,
     // repo_template should have 3 %'s where the repo's name should go
     repo_template: String,
     auth:Option<Auth>
 }
-impl Config{
-    fn from_file<P:AsRef<Path>>(loc:P)->Result<Config,Box<dyn std::error::Error>>{
+impl FileConfig{
+    fn from_file<P:AsRef<Path>>(loc:P)->Result<FileConfig,Box<dyn std::error::Error>>{
         let mut buf = Vec::new();
         let mut file = std::fs::File::open(loc)?;
         file.read_to_end(&mut buf)?;
