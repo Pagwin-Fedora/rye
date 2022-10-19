@@ -3,7 +3,7 @@
 extern crate git2;
 extern crate dirs;
 extern crate lazy_static;
-use std::io::{Read, Write};
+use std::{io::{Read, Write}, ops::{FromResidual, Try}};
 
 use lazy_static::lazy_static;
 use rocket::Data;
@@ -15,7 +15,7 @@ lazy_static!{
 fn main() {
     //making sure lazy_static code runs immediately before rocket starts spawning worker threads
     let _ = CONFIG.repos;
-    rocket::ignite().mount("/",routes![ping,create_repo,change_description,read_description]).launch();
+    rocket::ignite().mount("/",routes![ping, create_repo, change_description, read_description]).launch();
 }
 
 
@@ -72,7 +72,24 @@ impl <'a> rocket::response::Responder<'a> for EasyDisplay{
         rocket::response::Result::Ok(builder.finalize())
     }
 }
-
+impl Try for EasyDisplay{
+    type Output = String;
+    type Residual = String;
+    fn branch(self) -> std::ops::ControlFlow<Self::Residual, Self::Output> {
+        match self.0 {
+            Ok(v)=>std::ops::ControlFlow::Continue(v),
+            Err(v)=>std::ops::ControlFlow::Break(v)
+        }
+    }
+    fn from_output(output: Self::Output) -> Self {
+        EasyDisplay(Ok(output))
+    }
+}
+impl FromResidual for EasyDisplay{
+    fn from_residual(residual: <Self as Try>::Residual) -> Self {
+        EasyDisplay(Err(residual))
+    }
+}
 /// Corresponds to the endpoint /create_repo, this endpoint takes a string for it's body which it
 /// will use as the name of the repo it will initiate
 #[post("/create_repo", data = "<repo_name>")]
@@ -81,18 +98,18 @@ fn create_repo(repo_name:Data)->EasyDisplay{
     let tmp: Result<String,Box<dyn std::error::Error>> = try{
         let repo_name = {
             let mut tmp = String::new();
-            repo_name.open().read_to_string(&mut tmp)?;
+            repo_name.open().read_to_string(&mut tmp).unwrap();
             tmp
         };
         let mut builder = std::fs::DirBuilder::new();
         let mut pth = CONFIG.repos.clone();
         builder.recursive(true);
-        builder.create(&pth).map(|_|{()})?;
+        builder.create(&pth).unwrap();
 
         builder.recursive(false);
         pth.push(repo_name.as_str());
-        builder.create(&pth).map(|_|{()})?;
-        git2::Repository::init_bare(pth)?;
+        builder.create(&pth).unwrap();
+        git2::Repository::init_bare(pth).unwrap();
         repo_name.into()
     };
     tmp.map_err(|e|e.to_string()).into()
@@ -109,11 +126,11 @@ fn change_description(repo_name:String,description:Data)-> EasyDisplay{
     let tmp: Result<(),std::io::Error> = try{
         let description = {
             let mut tmp = String::new();
-            description.open().read_to_string(&mut tmp)?;
+            description.open().read_to_string(&mut tmp).unwrap();
             tmp
         };
-        let mut file = std::fs::File::create(pth)?;
-        write!(file,"{}",description)?;
+        let mut file = std::fs::File::create(pth).unwrap();
+        write!(file,"{}",description).unwrap();
         ().into()
     };
     tmp.map(|_|repo_name).map_err(|e|e.to_string()).into()
@@ -127,21 +144,9 @@ fn read_description(repo_name:String)-> EasyDisplay{
     pth.push("description");
     let res:Result<String, Box<dyn std::error::Error>> = try{
         let mut buf = String::new();
-        let mut file = std::fs::File::open(pth)?;
-        file.read_to_string(&mut buf)?;
+        let mut file = std::fs::File::open(pth).unwrap();
+        file.read_to_string(&mut buf).unwrap();
         buf.into()
     };
     res.map_err(|e|e.to_string()).into()
-}
-#[macro_export]
-macro_rules! vec {
-    (_) => {
-        {
-            let mut temp_vec = Vec::new();
-            $(
-                temp_vec.push($x);
-            )*
-            temp_vec
-        }
-    };
 }
