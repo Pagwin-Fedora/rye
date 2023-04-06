@@ -2,3 +2,4 @@
 /dock
 /rye-client/target
 rye
+*.tar
